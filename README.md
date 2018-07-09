@@ -4,7 +4,7 @@ Vacation Manager SmartApp for SmartThings
 # Summary
 Automatically puts home in a vacation mode after you're gone and manages a visiting house sitter
 
-This app allows you to extend SmartThings to effectively create a vacation mode that is automatically triggered after a selected sway time.  For instance, you might want to turn off the water or gas when you're on vacation but you might not want to do that all the time when you're in and out of the house.  Vacation Manager also allows you to have a house sitter, dog walker, pet feeder, plat waterer or whathaveyou stop by for a visit and turns on devices for their visit.
+This app allows you to extend SmartThings to effectively create a vacation mode that is automatically triggered after a selected sway time.  For instance, you might want to turn off the water or gas when you're on vacation but you might not want to do that all the time when you're in and out of the house.  Vacation Manager also allows you to have a house sitter, dog walker, pet feeder, plant waterer or whathaveyou stop by for a visit and turns on devices for their visit.
 
 # Required Devices
 None.  It is also suggested to use the app in conjunction with a water or gas valve but that is by no means required.
@@ -14,7 +14,7 @@ However, there are a few suggestions:
 
 2. It is highly suggested to create a vacation routine such as "I'm on Vacation!".  This will allow you to pick and choose how devices are turned off for vacation (either in the app or via the routine that the app invokes).  Duplication isn't an issue (turning off a light or valve in both places) and it gives you some insurance on the off chance that the device does not receive the command the first time.  Another reason is that the app does not implement controls of HVAC, locks or other things that are well taken care of by a routine where duplication is unnecessary.
 
-3. For the House Sitter, it is suggested to use a device like the SmarThings Arrival fob or similar but any presence sensor can be used.  It is advisable to have the app execute your "Goodbye!" or similar routine after the House Sitter leaves so as to ensure that everything is secure.
+3. For the House Sitter, it is suggested to use a device like the SmartThings Arrival fob or similar but any presence sensor can be used.  It is advisable to have the app execute your "Goodbye!" or similar routine after the House Sitter leaves so as to ensure that everything is secure.
 
 # Installation
 
