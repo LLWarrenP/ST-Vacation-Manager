@@ -15,11 +15,12 @@
  */
 
 def appVersion() {
-	return "0.1"
+	return "1.0"
 }
 
 /*
 * Change Log:
+* 2018-7-9  - (1.0) Initial release
 * 2018-7-8  - (0.1) Debug release
 */
 
