@@ -15,11 +15,12 @@
  */
 
 def appVersion() {
-	return "1.1"
+	return "1.2"
 }
 
 /*
 * Change Log:
+* 2018-7-12 - (1.2) Reinstated push messages for house sitter arrival/departure and made small tweaks
 * 2018-7-10 - (1.1) Improved vacation mode handling, improved reliability due to latent SHM mode status
 * 2018-7-9  - (1.0) Initial release
 * 2018-7-8  - (0.1) Debug release
@@ -53,7 +54,7 @@ def configure() {
 			input "vacationMode", "mode", title: "Which mode?", required: true
 			input "vacationTime", "decimal", title: "After how many hours?", defaultValue: 24, range: "0..*", required: true
         	input "vacationRoutine", "enum", title: "And execute this routine:", required: false, options: actions
-            paragraph "Note that the (optional) routine specified may also perform some duplicate actions so you can decide whether to have the routine perform them (such as HVAC) or have them done in both places to be doubly sure (such as lights and valves),"
+            paragraph "Note that the (optional) routine specified may also perform some duplicate actions so you can decide whether to have the routine perform them (such as HVAC) or have them done in both places to be doubly sure (such as lights and valves).  This routine will be executed when you go on vacation as well as when your house sitter departs."
 		}
 		section("Turn off these switches and valves while on vacation:") {
         	paragraph "Turn off these devices/valves when departing.  This can be in lieu of or a supplement to any routine executed above"
@@ -143,12 +144,13 @@ def checkVacation() {
 			log.debug "vacation manager determined not everyone has been away long enough; doing nothing"
 		}
 	} else {
-    	log.debug "vacation manager determiend not everyone is away; doing nothing"
+    	log.debug "vacation manager determined not everyone is away; doing nothing"
     }
 }
 
 def houseSitterPresence(evt) {
 	if (evt.value == "present") {
+		send("Vacation Manager reports house sitter has arrived") 
 		log.debug "house sitter has arrived during ${location.mode} mode"
 		if (location.mode == vacationMode) {
 			// Turn on any devices that should be on when the house sitter is present
@@ -163,6 +165,7 @@ def houseSitterPresence(evt) {
 		}
 	}
 	else if (evt.value == "not present") {
+		send("Vacation Manager reports house sitter has departed") 
 		log.debug "house sitter has departed during ${location.mode} mode"
         if (location.mode == vacationMode) {
             // Turn off any devices that should be off when the house sitter has left
@@ -171,7 +174,7 @@ def houseSitterPresence(evt) {
             	if (onSitterDevices) onSitterDevices.off()
                 if (onSitterVavles) onSitterValves.close()
             }
-            log.debug "turning off devices after sitter has left"
+            log.debug "turning off selected devices after sitter has left"
             if (offSitterDevices) offSitterDevices.off()
             if (offSitterVavles) offSitterValves.close()
             if (sitterDepartureRoutine) log.debug "executing routine '${settings.sitterDepartureRoutine}' for house sitter departure"
@@ -180,7 +183,7 @@ def houseSitterPresence(evt) {
 			if (vacationRoutine) log.debug "executing routine '${settings.vacationRoutine}' for house sitter departure"
 			location.helloHome?.execute(settings.vacationRoutine)
             if (location.mode != vacationMode) setLocationMode(vacationMode)
-            log.debug "house sitter not present, in ${location.mode} mode"
+            runIn(5, setVacationMode)
             }
     }
 }
@@ -220,5 +223,8 @@ private findVacationThreshold() {
 }
 
 def setVacationMode() {
-	if (location.mode != vacationMode) setLocationMode(vacationMode)
+	if (location.mode != vacationMode) {
+    	log.debug "resetting current mode to ${vacationMode}"
+        setLocationMode(vacationMode)
+    }
 }
