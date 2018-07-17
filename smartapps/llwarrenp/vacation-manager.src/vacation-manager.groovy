@@ -15,11 +15,12 @@
  */
 
 def appVersion() {
-	return "1.2"
+	return "1.3"
 }
 
 /*
 * Change Log:
+* 2018-7-17 - (1.3) Improved vacation return logic and added app state tracking for better reliability
 * 2018-7-12 - (1.2) Reinstated push messages for house sitter arrival/departure and made small tweaks
 * 2018-7-10 - (1.1) Improved vacation mode handling, improved reliability due to latent SHM mode status
 * 2018-7-9  - (1.0) Initial release
@@ -86,12 +87,19 @@ def configure() {
 def installed() {
 	log.debug "Installed with settings: ${settings}"
 	subscribe(people, "presence", presence)
+	// Assume we are not on vacation but then check just to be sure
+	state[onVacation()] = "false"
+    if (everyoneIsAway()) checkVacation()
     if ((location.mode == vacationMode) && (houseSitters)) subscribe(houseSitters, "presence", houseSitterPresence) 
 }
 
 def updated() {
 	log.debug "Updated with settings: ${settings}"
 	unsubscribe()
+    // After update, check vacation status and set state machine
+    if (location.mode == vacationMode) state[onVacation()] = "true"
+    else state[onVacation()] = "false"
+    if (everyoneIsAway() && (state[onVacation()] != "true")) checkVacation()
 	subscribe(people, "presence", presence)
     if ((location.mode == vacationMode) && (houseSitters)) subscribe(houseSitters, "presence", houseSitterPresence) 
 }
@@ -100,19 +108,21 @@ def presence(evt) {
 	log.debug "vacation manager was informed that someone's presence has changed to '${evt.value}'"
 	if (evt.value == "not present") {
 		if (everyoneIsAway()) {
-			log.debug "vacation manager has determined that everyone is away; enabling vacation mode after ${vacationTime} hours"
+			log.debug "vacation manager has determined that everyone is away; automatically enabling vacation mode ${vacationTime} hours from now if no one returns"
 			runIn(findVacationThreshold() * 3600, checkVacation)
 		}
 	}
 	else {
     	// Vacation is over as we have returned - return to normal operation (SHM will change state)
-		log.debug "vacation manager has determined that people are present; disabling vacation"
+		if (state[onVacation()] == "true") log.debug "vacation manager has determined that someone has returned from vacation; exiting vacation mode"
+        else log.debug "vacation manager has determined that someone has returned while not in vacation mode; resuming normal operation"
         unschedule(checkVacation)
         if (houseSitters) unsubscribe(houseSitters)
-        if (boolDevicesReturn) {
+        if ((state[onVacation()] == "true") && (boolDevicesReturn)) {
         	if (offDevices) offDevices.on()
             if (offValves) offValves.open()
         }
+        state[onVacation()] = "false"
     }
 }
 
@@ -130,10 +140,11 @@ def checkVacation() {
 		}
 		log.debug "vacationmanager found ${awayLongEnough.size()} out of ${people.size()} person(s) who were away long enough"
 		if (awayLongEnough.size() == people.size()) {
-			log.info "vacation manager changing mode to '${vacationMode}' because everyone has been away from home for ${vacationTime} hours"
-			def message = "Vacation Manager has activated ${vacationMode} mode after ${vacationTime} hours"
+			def message = "Vacation Manager has activated ${vacationMode} mode since everyone has been gone for more than ${vacationTime} hours"
+            log.info message
 			send(message)
 			setLocationMode(vacationMode)
+            state[onVacation()] = "true"
             location.helloHome?.execute(settings.vacationRoutine)
             // Turn off any devices that should be off during vacation
             if (offDevices) offDevices.off()
@@ -142,9 +153,11 @@ def checkVacation() {
             if (houseSitters) subscribe(houseSitters, "presence", houseSitterPresence)
 		} else {
 			log.debug "vacation manager determined not everyone has been away long enough; doing nothing"
+            state[onVacation()] = "false"
 		}
 	} else {
     	log.debug "vacation manager determined not everyone is away; doing nothing"
+        state[onVacation()] = "false"
     }
 }
 
@@ -227,4 +240,8 @@ def setVacationMode() {
     	log.debug "resetting current mode to ${vacationMode}"
         setLocationMode(vacationMode)
     }
+}
+
+private onVacation() {
+	"onVacation"
 }
