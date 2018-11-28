@@ -15,16 +15,17 @@
  */
 
 def appVersion() {
-	return "1.3"
+	return "1.4"
 }
 
 /*
 * Change Log:
-* 2018-7-17 - (1.3) Improved vacation return logic and added app state tracking for better reliability
-* 2018-7-12 - (1.2) Reinstated push messages for house sitter arrival/departure and made small tweaks
-* 2018-7-10 - (1.1) Improved vacation mode handling, improved reliability due to latent SHM mode status
-* 2018-7-9  - (1.0) Initial release
-* 2018-7-8  - (0.1) Debug release
+* 2018-11-24 - (1.4) Added logic to avoid turning off lights, valves, etc. on a sitter that is already present
+* 2018-7-17  - (1.3) Improved vacation return logic and added app state tracking for better reliability
+* 2018-7-12  - (1.2) Reinstated push messages for house sitter arrival/departure and made small tweaks
+* 2018-7-10  - (1.1) Improved vacation mode handling, improved reliability due to latent SHM mode status
+* 2018-7-9   - (1.0) Initial release
+* 2018-7-8   - (0.1) Debug release
 */
 
 definition(
@@ -114,7 +115,11 @@ def presence(evt) {
 	}
 	else {
     	// Vacation is over as we have returned - return to normal operation (SHM will change state)
-		if (state[onVacation()] == "true") log.debug "vacation manager has determined that someone has returned from vacation; exiting vacation mode"
+		if (state[onVacation()] == "true") {
+            def message = "Vacation Manager has deactivated ${vacationMode} mode since someone has returned from vacation"
+            log.info message
+			send(message)
+            }
         else log.debug "vacation manager has determined that someone has returned while not in vacation mode; resuming normal operation"
         unschedule(checkVacation)
         if (houseSitters) unsubscribe(houseSitters)
@@ -151,6 +156,22 @@ def checkVacation() {
             if (offValves) offValves.close()
             // If we have a house sitter, start looking for their arrival/departure
             if (houseSitters) subscribe(houseSitters, "presence", houseSitterPresence)
+		    // If we have a sitter, check for presence (e.g. a hot handoff was made) and turn back on any devices that should be on when a house sitter is present
+    		if (houseSitters) {
+    			for (person in houseSitters) {
+					if (person.currentPresence == "present") {
+			            log.debug "turning on devices for already present house sitter"
+            			if (onSitterDevices) onSitterDevices.on()
+			            if (onSitterVavles) onSitterValves.open()
+            			if (sitterArrivalRoutine) log.debug "executing routine '${settings.sitterArrivalRoutine}' for house sitter arrival"
+			            location.helloHome?.execute(settings.sitterArrivalRoutine)
+			            // Let SHM settle and then put us back into vacation mode if not already
+						if (location.mode != vacationMode) setLocationMode(vacationMode)   
+			            runIn(5, setVacationMode)
+						break
+						}
+        			}
+        		}
 		} else {
 			log.debug "vacation manager determined not everyone has been away long enough; doing nothing"
             state[onVacation()] = "false"
@@ -203,6 +224,7 @@ def houseSitterPresence(evt) {
 
 private everyoneIsAway() {
 	def result = true
+    // Check for residents
 	for (person in people) {
 		if (person.currentPresence == "present") {
 			result = false
