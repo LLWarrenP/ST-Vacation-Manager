@@ -20,7 +20,7 @@ def appVersion() {
 
 /*
 * Change Log:
-* 2018-12-5  - (1.5) Added HVAC management instead of relying on vacation routine to do it since routines cannot do a resume schedule
+* 2018-12-22 - (1.5) Added HVAC management instead of relying on vacation routine to do it since routines cannot do a resume schedule
 * 2018-11-24 - (1.4) Added logic to avoid turning off lights, valves, etc. on a sitter that is already present
 * 2018-7-17  - (1.3) Improved vacation return logic and added app state tracking for better reliability
 * 2018-7-12  - (1.2) Reinstated push messages for house sitter arrival/departure and made small tweaks
@@ -138,7 +138,7 @@ def presence(evt) {
         	if (offDevices) offDevices.on()
             if (offValves) offValves.open()
         }
-        if (thermostats && boolResumeHVAC) thermostats.resumeProgram()
+        if ((state[onVacation()] == "true") && (thermostats && boolResumeHVAC)) thermostats.resumeProgram()
         state[onVacation()] = "false"
     }
 }
@@ -206,7 +206,7 @@ def houseSitterPresence(evt) {
 	if (evt.value == "present") {
 		send("Vacation Manager reports house sitter has arrived") 
 		log.debug "house sitter has arrived during ${location.mode} mode"
-		if (location.mode == vacationMode) {
+		if ((state[onVacation()] == "true") || (location.mode == vacationMode)) {
 			// Turn on any devices that should be on when the house sitter is present
             log.debug "turning on devices for house sitter arrival"
             if (onSitterDevices) onSitterDevices.on()
@@ -222,7 +222,7 @@ def houseSitterPresence(evt) {
 	else if (evt.value == "not present") {
 		send("Vacation Manager reports house sitter has departed") 
 		log.debug "house sitter has departed during ${location.mode} mode"
-        if (location.mode == vacationMode) {
+        if ((state[onVacation()] == "true") || (location.mode == vacationMode)) {
             // Turn off any devices that should be off when the house sitter has left
             if (boolOffSitterDevicesLeave) {
             	log.debug "turning off devices that were turned on when house sitter arrived"
@@ -287,6 +287,7 @@ def setVacationMode() {
     	log.debug "resetting current mode to ${vacationMode}"
         setLocationMode(vacationMode)
     }
+    state[onVacation()] = "true"
 }
 
 private onVacation() {
