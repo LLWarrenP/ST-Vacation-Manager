@@ -15,11 +15,12 @@
  */
 
 def appVersion() {
-	return "1.5"
+	return "1.6"
 }
 
 /*
 * Change Log:
+* 2018-02-25 - (1.6) Modified HVAC management logic to first check if thermostat supports resume since not all thermostats do
 * 2018-12-22 - (1.5) Added HVAC management instead of relying on vacation routine to do it since routines cannot do a resume schedule
 * 2018-11-24 - (1.4) Added logic to avoid turning off lights, valves, etc. on a sitter that is already present
 * 2018-7-17  - (1.3) Improved vacation return logic and added app state tracking for better reliability
@@ -72,19 +73,20 @@ def configure() {
 			input "heatingSetpoint", "decimal", title: "For heating, set thermostats to:", defaultValue: 62, range: "0..100", required: false
 			input "coolingSetpoint", "decimal", title: "For cooling, set thermostats to:", defaultValue: 85, range: "0..100", required: false
         	input "boolResumeHVAC", "bool", title: "Resume normal HVAC operation when I return?", required: false
+            paragraph "Note: Some thermostats may not support the ability to resume and will be left at vacation setpoints."
 		}
 		section("House sitter settings while on vacation:") {
-        	paragraph "If you're having someone to come by occasionally to do something while you're away, turn on the minimal required devices while they are present (water, gas, etc.)."
-            paragraph "Optionally execute a routine to 'clean up' by turning off lights, locking doors, etc. such as the 'Goodbye!' routine.  After the sitter departure routines execute the main vacation routine mode will also execute."
-			input "houseSitters", "capability.presenceSensor", title: "Which presence sensors?", multiple: true, required: false
-        	input "sitterArrivalRoutine", "enum", title: "Execute this arrival routine:", required: false, options: actions
+        	paragraph "If you're having a house sitter come by occasionally while you're away, turn on the minimal required devices while they are present (water, gas, etc.)."
+            input "houseSitters", "capability.presenceSensor", title: "Which presence sensors?", multiple: true, required: false
+			paragraph "Optionally execute a routine to 'clean up' by turning off lights, locking doors, etc. such as the 'Goodbye!' routine.  After the sitter departure routines execute the main vacation routine mode will also execute."
+			input "sitterArrivalRoutine", "enum", title: "Execute this arrival routine:", required: false, options: actions
 			input "onSitterDevices", "capability.switch", title: "Turn on these switches when the sitter arrives:", multiple: true, required: false
        		input "onSitterValves", "capability.valve", title: "Open these valves when the sitter arrives:", multiple: true, required: false
         	input "boolOffSitterDevicesLeave", "bool", title: "Turn them off when they leave?", required: false
         	input "sitterDepartureRoutine", "enum", title: "Execute this departure routine:", required: false, options: actions
 			input "offSitterDevices", "capability.switch", title: "Turn off these switches after the sitter leaves:", multiple: true, required: false       
 			input "offSitterValves", "capability.valve", title: "Close these valves after the sitter leaves:", multiple: true, required: false
-            input "boolSitterResumeHVAC", "bool", title: "Temporarily resume normal HVAC operation while the sitter is present?", required: false
+            input "boolSitterResumeHVAC", "bool", title: "Temporarily resume normal HVAC operation while the sitter is present (if supported)?", required: false
             paragraph "If you enable this, the selected thermostats will resume their program when the sitter arrives and go back to the vacation setpoints when they depart."
 		}
 		section( "Notifications" ) {
@@ -113,7 +115,7 @@ def updated() {
     else state[onVacation()] = "false"
     if (everyoneIsAway() && (state[onVacation()] != "true")) checkVacation()
 	subscribe(people, "presence", presence)
-    if ((location.mode == vacationMode) && (houseSitters)) subscribe(houseSitters, "presence", houseSitterPresence) 
+    if ((location.mode == vacationMode) && (houseSitters)) subscribe(houseSitters, "presence", houseSitterPresence)
 }
 
 def presence(evt) {
@@ -138,7 +140,7 @@ def presence(evt) {
         	if (offDevices) offDevices.on()
             if (offValves) offValves.open()
         }
-        if ((state[onVacation()] == "true") && (thermostats && boolResumeHVAC)) thermostats.resumeProgram()
+        if ((state[onVacation()] == "true") && (thermostats && boolResumeHVAC)) resumeThermostats()
         state[onVacation()] = "false"
     }
 }
@@ -182,7 +184,7 @@ def checkVacation() {
 			            log.debug "turning on devices for already present house sitter"
             			if (onSitterDevices) onSitterDevices.on()
 			            if (onSitterVavles) onSitterValves.open()
-                        if (thermostats && boolSitterResumeHVAC) thermostats.resumeProgram()
+                        if (thermostats && boolSitterResumeHVAC) resumeThermostats()
             			if (sitterArrivalRoutine) log.debug "executing routine '${settings.sitterArrivalRoutine}' for house sitter arrival"
 			            location.helloHome?.execute(settings.sitterArrivalRoutine)
 			            // Let SHM settle and then put us back into vacation mode if not already
@@ -211,7 +213,7 @@ def houseSitterPresence(evt) {
             log.debug "turning on devices for house sitter arrival"
             if (onSitterDevices) onSitterDevices.on()
             if (onSitterVavles) onSitterValves.open()
-            if (thermostats && boolSitterResumeHVAC) thermostats.resumeProgram()
+            if (thermostats && boolSitterResumeHVAC) resumeThermostats()
             if (sitterArrivalRoutine) log.debug "executing routine '${settings.sitterArrivalRoutine}' for house sitter arrival"
             location.helloHome?.execute(settings.sitterArrivalRoutine)
             // Let SHM settle and then put us back into vacation mode if not already
@@ -288,6 +290,13 @@ def setVacationMode() {
         setLocationMode(vacationMode)
     }
     state[onVacation()] = "true"
+}
+
+private resumeThermostats() {
+	// Checks to see if the thermostat supports the resumeProgram command and if so sends it
+	thermostats.each {
+    	if (it.supportedCommands.find {element -> element.name == "resumeProgram"}) it.resumeProgram() else log.debug "${it.label} does not support resume program command, leaving at vacation setpoints"
+	}
 }
 
 private onVacation() {
