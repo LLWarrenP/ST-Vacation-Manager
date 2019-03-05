@@ -295,7 +295,7 @@ def setVacationMode() {
 private resumeThermostats() {
 	// Checks to see if the thermostat supports the resumeProgram command and if so sends it
 	thermostats.each {
-    	if (it.supportedCommands.find {element -> element.name == "resumeProgram"}) it.resumeProgram() else log.debug "${it.label} does not support resume program command, leaving at vacation setpoints"
+    	if (it.hasCommand("resumeProgram")) it.resumeProgram() else log.debug "${it.label} does not support resume program command, leaving at vacation setpoints"
 	}
 }
 
