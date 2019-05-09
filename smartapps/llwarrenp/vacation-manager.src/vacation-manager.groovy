@@ -15,11 +15,12 @@
  */
 
 def appVersion() {
-	return "1.6"
+	return "1.7"
 }
 
 /*
 * Change Log:
+* 2019-04-21 - (1.7) Improved and simplified vacation mode management to allow other apps/devices to trigger consistently
 * 2018-02-25 - (1.6) Modified HVAC management logic to first check if thermostat supports resume since not all thermostats do
 * 2018-12-22 - (1.5) Added HVAC management instead of relying on vacation routine to do it since routines cannot do a resume schedule
 * 2018-11-24 - (1.4) Added logic to avoid turning off lights, valves, etc. on a sitter that is already present
@@ -165,7 +166,6 @@ def checkVacation() {
             state[onVacation()] = "true"
             location.helloHome?.execute(settings.vacationRoutine)
             // Let SHM settle and then put us back into vacation mode if not already
-			if (location.mode != vacationMode) setLocationMode(vacationMode)
             runIn(15, setVacationMode)           
             // Turn off any devices that should be off during vacation
             if (offDevices) offDevices.off()
@@ -187,9 +187,6 @@ def checkVacation() {
                         if (thermostats && boolSitterResumeHVAC) resumeThermostats()
             			if (sitterArrivalRoutine) log.debug "executing routine '${settings.sitterArrivalRoutine}' for house sitter arrival"
 			            location.helloHome?.execute(settings.sitterArrivalRoutine)
-			            // Let SHM settle and then put us back into vacation mode if not already
-						if (location.mode != vacationMode) setLocationMode(vacationMode)   
-			            runIn(15, setVacationMode)
 						break
 						}
         			}
@@ -210,15 +207,13 @@ def houseSitterPresence(evt) {
 		log.debug "house sitter has arrived during ${location.mode} mode"
 		if ((state[onVacation()] == "true") || (location.mode == vacationMode)) {
 			// Turn on any devices that should be on when the house sitter is present
+            // This effectively pauses vacation mode for the duration of the sitter's stay
             log.debug "turning on devices for house sitter arrival"
             if (onSitterDevices) onSitterDevices.on()
             if (onSitterVavles) onSitterValves.open()
             if (thermostats && boolSitterResumeHVAC) resumeThermostats()
             if (sitterArrivalRoutine) log.debug "executing routine '${settings.sitterArrivalRoutine}' for house sitter arrival"
             location.helloHome?.execute(settings.sitterArrivalRoutine)
-            // Let SHM settle and then put us back into vacation mode if not already
-			if (location.mode != vacationMode) setLocationMode(vacationMode)
-            runIn(15, setVacationMode)
 		}
 	}
 	else if (evt.value == "not present") {
@@ -243,8 +238,8 @@ def houseSitterPresence(evt) {
 			// Set the mode back to the vacation mode just in case the mode or some devices changed
 			if (vacationRoutine) log.debug "executing routine '${settings.vacationRoutine}' for house sitter departure"
 			location.helloHome?.execute(settings.vacationRoutine)
-            if (location.mode != vacationMode) setLocationMode(vacationMode)
-            runIn(5, setVacationMode)
+            // Allow SHM to settle and then ensure that we resume vacation mode since sitter is gone
+            runIn(15, setVacationMode)
             }
     }
 }
